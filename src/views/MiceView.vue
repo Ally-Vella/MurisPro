@@ -269,16 +269,10 @@
           </button>
         </div>
         <div class="form-body">
-          <!-- 小鼠ID字段（仅在添加模式显示） -->
-          <div class="form-group" v-if="modalMode === 'add'">
+          <div class="form-group">
             <label>小鼠 ID *:</label>
-            <input type="text" v-model="formData.id">
-          </div>
-          <!-- 显示小鼠ID（仅在编辑模式显示） -->
-          <div class="form-group" v-if="modalMode === 'edit'">
-            <label>小鼠 ID:</label>
-            <span>{{ formData.id }}</span>
-          </div>          
+            <input type="text" v-model="formData.id" :placeholder="modalMode === 'edit' ? '修改小鼠ID' : '输入小鼠ID'">
+          </div>     
           <!-- 基因型选择 -->
           <div class="form-group">
             <div class="form-header">
@@ -1317,6 +1311,22 @@ const closeModal = () => {
 
 const saveMouse = async () => {
   if (!validateMouse(formData)) return
+
+  const isDuplicate = mice.value.some(m => {
+    if (modalMode.value === 'add') {
+      // 添加模式：检查 ID 是否已存在
+      return m.id === formData.id;
+    } else if (modalMode.value === 'edit') {
+      // 编辑模式：检查 ID 是否被其他小鼠占用（排除自身 tid）
+      return m.id === formData.id && m.tid !== formData.tid;
+    }
+    return false;
+  });
+
+  if (isDuplicate) {
+    toast.error(`小鼠 ID "${formData.id}" 已存在，请使用唯一的 ID`)
+    return
+  }
   
   if (selectedGenes.value.length > 1 && selectedGenes.value.some(g => g.locus === "WT")) {
     toast.error("野生型不能添加基因型")
@@ -1601,6 +1611,21 @@ const saveTemplateMice = async () => {
 
   if (hasEmptyId) {
     toast.error("存在ID为空的小鼠")
+    return
+  }
+
+  const newIds = newMice.value.map(m => m.id);
+  const existingIds = mice.value.map(m => m.id);
+
+  const internalDuplicates = newIds.filter((id, index) => newIds.indexOf(id) !== index);
+  if (internalDuplicates.length > 0) {
+    toast.error(`列表内部存在重复 ID: ${internalDuplicates.join(', ')}`)
+    return
+  }
+
+  const externalDuplicates = newIds.filter(id => existingIds.includes(id));
+  if (externalDuplicates.length > 0) {
+    toast.error(`部分 ID 已存在于数据库中: ${externalDuplicates.join(', ')}`)
     return
   }
   

@@ -10,7 +10,7 @@ from io import BytesIO
 from sqlalchemy import text, inspect, or_, and_
 from sqlalchemy.orm import joinedload
 import re
-from migration_script import DatabaseMigrator
+# from migration_script import DatabaseMigrator
 
 import socket
 
@@ -269,6 +269,9 @@ def add_mouse():
     """添加新小鼠"""
     data = request.json
     try:
+        existing_mouse = Mouse.query.filter_by(id=data['id']).first()
+        if existing_mouse:
+            return jsonify({'error': f"ID '{data['id']}' 已经存在"}), 400
         mouse = Mouse()
         if data['id']:
             mouse.id = data['id']
@@ -355,6 +358,12 @@ def update_mouse(mouse_tid):
     data = request.json
     mouse = Mouse.query.get_or_404(mouse_tid)
     try:
+        if 'id' in data and data['id']:
+            new_id = data['id']
+            existing = Mouse.query.filter(Mouse.id == new_id, Mouse.tid != mouse_tid).first()
+            if existing:
+                return jsonify({'error': '该 ID 已被其他小鼠占用'}), 400
+            mouse.id = new_id
         if data['genotype']:
             Genotype.query.filter_by(mouse_id=mouse.tid).delete()
             genotypes = data['genotype']
@@ -3299,4 +3308,4 @@ def change_display_setting(type):
     return jsonify(), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, host='localhost', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5111)
