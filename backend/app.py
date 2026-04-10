@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, make_response
 from flask_cors import CORS
 from datetime import datetime, date
 from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, GeneLocus, Allele, Genotype, Location, ExperimentType, FieldDefinition, Experiment, ExperimentClass, ExperimentValue, PredefinedGroup
@@ -63,6 +63,27 @@ last_heartbeat = time.time()
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)  # 允许跨域请求
 
+def check_auth(username, password):
+    auth_config = config.get('auth', {})
+    if not auth_config.get('enabled', False):
+        return True
+    return username == auth_config.get('username') and password == auth_config.get('password')
+
+def authenticate():
+    """发送 401 响应以触发浏览器登录框"""
+    resp = make_response("登录失败，请输入正确的凭据", 401)
+    resp.headers['WWW-Authenticate'] = 'Basic realm="Login Required"'
+    return resp
+
+@app.before_request
+def require_auth():
+    # 允许心跳检测跳过验证（可选，为了稳定性）
+    if request.path == '/heartbeat':
+        return
+        
+    auth = request.authorization
+    if not auth or not check_auth(auth.username, auth.password):
+        return authenticate()
 
 # 配置数据库 - 修改部分开始
 def get_base_dir():
