@@ -4,7 +4,7 @@ from datetime import datetime, date
 from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, GeneLocus, Allele, Genotype, Location, ExperimentType, FieldDefinition, Experiment, ExperimentClass, ExperimentValue, PredefinedGroup, User, OperationLog
 import os, sys, shutil, glob, json, socket, re
 from pathlib import Path
-from sqlalchemy import text
+from sqlalchemy import text, inspect, or_, and_
 from sqlalchemy.orm import joinedload
 # from migration_script import DatabaseMigrator
 
