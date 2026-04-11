@@ -147,6 +147,21 @@
               <div class="tooltip" v-if="sidebarCollapsed">宣传页</div>
             </div>
           </router-link>
+          <router-link 
+            :to="{ name: 'OperationLogs' }" 
+            custom
+            v-slot="{ navigate, isActive }"
+          >
+            <div 
+              class="nav-item" 
+              :class="{ 'active': isActive }"
+              @click="navigate"
+            >
+              <i class="material-icons">manage_search</i>
+              <span v-if="!sidebarCollapsed">操作日志</span>
+              <div class="tooltip" v-if="sidebarCollapsed">操作日志</div>
+            </div>
+          </router-link>
         </div>
         
         <!-- 折叠按钮（在侧边栏底部） -->

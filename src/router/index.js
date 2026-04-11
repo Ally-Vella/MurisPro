@@ -1,3 +1,10 @@
+/*
+ * @Description: 
+ * @Date: 2026-04-12 00:51:45
+ * @LastEditTime: 2026-04-12 01:07:04
+ * @filePath: Do not edit
+ * @author: leihj
+ */
 import { createRouter, createWebHashHistory } from 'vue-router'
 import HomeView from '../views/DashBoard.vue'
 import MiceView from '../views/MiceView.vue';
@@ -55,7 +62,12 @@ const routes = [
   path: '/info',
   name: 'InfoPage',
   component: () => import('../views/InfoView.vue')
-}
+},
+  {
+  path: '/logs',
+  name: 'OperationLogs',
+  component: () => import('../views/LogView.vue')
+  }
 ]
 
 const router = createRouter({
