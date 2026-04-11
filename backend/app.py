@@ -225,8 +225,32 @@ def manual_backup():
 
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
-    logs = OperationLog.query.order_by(OperationLog.timestamp.desc()).limit(100).all()
-    return jsonify([l.to_dict() for l in logs])
+    """获取操作日志列表，支持多条件筛选"""
+    try:
+        query = OperationLog.query
+        
+        # 接收前端传来的过滤参数
+        username = request.args.get('username', '')
+        target_id = request.args.get('target_id', '')
+        action = request.args.get('action', '')
+        
+        # 动态添加过滤条件
+        if username:
+            query = query.filter(OperationLog.username.ilike(f'%{username}%'))
+        if target_id:
+            # 因为我们在存日志时 target_id 可能是小鼠ID也可能是笼位ID
+            query = query.filter(OperationLog.target_id.ilike(f'%{target_id}%'))
+        if action:
+            query = query.filter(OperationLog.action == action)
+            
+        limit = request.args.get('limit', 100, type=int)
+        # 按时间倒序返回
+        logs = query.order_by(OperationLog.timestamp.desc()).limit(limit).all()
+        
+        return jsonify([l.to_dict() for l in logs]), 200
+    except Exception as e:
+        logger.error(f"获取日志失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/database/backups', methods=['GET'])
 def get_backup_list():
@@ -3410,16 +3434,6 @@ def change_display_setting(type):
             json.dump(config, f, indent=4)
     return jsonify(), 200
 
-@app.route('/api/logs', methods=['GET'])
-def get_operation_logs():
-    """获取操作日志列表（管理员可用）"""
-    from flask import g
-    if getattr(g, 'current_role', 'user') != 'admin':
-        return jsonify({'error': '需要管理员权限'}), 403
-        
-    limit = request.args.get('limit', 50, type=int)
-    logs = OperationLog.query.order_by(OperationLog.id.desc()).limit(limit).all()
-    return jsonify([l.to_dict() for l in logs])
 
 @app.route('/api/rollback', methods=['POST'])
 def rollback_last_action():
