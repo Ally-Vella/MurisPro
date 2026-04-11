@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -393,4 +394,33 @@ class PredefinedGroup(db.Model):
             'experiment_id': self.experiment_id,
             'Gtype': self.Gtype,
             'rules': self.rules or []
+        }
+
+class User(db.Model):
+    __tablename__ = 'user'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(128), nullable=False)
+    role = db.Column(db.String(20), default='user') # 'admin' 或 'user'
+
+class OperationLog(db.Model):
+    __tablename__ = 'operation_log'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50))
+    action = db.Column(db.String(20))      # CREATE, UPDATE, DELETE, MOVE, BACKUP
+    target_table = db.Column(db.String(50)) # mouse, cage, database
+    target_id = db.Column(db.String(50))   # ID标识
+    old_data = db.Column(db.JSON)          # <--- 恢复此字段记录修改前快照
+    new_data = db.Column(db.JSON)          # <--- 恢复此字段记录修改后快照
+    detail = db.Column(db.Text)            # 操作简述
+    timestamp = db.Column(db.DateTime, default=datetime.now)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'action': self.action,
+            'target': f"{self.target_table}({self.target_id})",
+            'detail': self.detail,
+            'timestamp': self.timestamp.strftime('%Y-%m-%d %H:%M:%S')
         }

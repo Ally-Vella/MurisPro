@@ -1,53 +1,22 @@
 from flask import Flask, jsonify, request, send_file, make_response
 from flask_cors import CORS
 from datetime import datetime, date
-from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, GeneLocus, Allele, Genotype, Location, ExperimentType, FieldDefinition, Experiment, ExperimentClass, ExperimentValue, PredefinedGroup
-import os
-import sys
+from models import db, Mouse, Cage, WeightRecord, StatusRecord, Pedigree, GeneLocus, Allele, Genotype, Location, ExperimentType, FieldDefinition, Experiment, ExperimentClass, ExperimentValue, PredefinedGroup, User, OperationLog
+import os, sys, shutil, glob, json, socket, re
 from pathlib import Path
-import pandas as pd
-from io import BytesIO
-from sqlalchemy import text, inspect, or_, and_
+from sqlalchemy import text
 from sqlalchemy.orm import joinedload
-import re
 # from migration_script import DatabaseMigrator
-
-import socket
 
 # 首先应用猴子补丁 - 必须在创建 Flask 应用之前
 def apply_socket_patch():
-    """应用安全的 socket 函数补丁"""
-    # 保存原始函数
-    _original_getfqdn = socket.getfqdn
     _original_gethostname = socket.gethostname
-    
     def safe_gethostname():
         try:
             name = _original_gethostname()
-            if isinstance(name, bytes):
-                # 尝试常见编码
-                for encoding in ['utf-8', 'gbk', 'latin-1']:
-                    try:
-                        return name.decode(encoding)
-                    except UnicodeDecodeError:
-                        continue
-                # 所有编码失败则替换无效字节
-                return name.decode('utf-8', errors='replace')
-            return name
-        except Exception:
-            return 'localhost'
-    
-    def safe_getfqdn(name=''):
-        try:
-            # 使用我们安全的主机名函数
-            hostname = safe_gethostname()
-            return f"{hostname}.local" if hostname else "localhost"
-        except Exception:
-            return "localhost"
-    
-    # 应用补丁
+            return name.decode('utf-8', errors='replace') if isinstance(name, bytes) else name
+        except Exception: return 'localhost'
     socket.gethostname = safe_gethostname
-    socket.getfqdn = safe_getfqdn
 
 # 应用补丁
 apply_socket_patch()
@@ -64,10 +33,20 @@ app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)  # 允许跨域请求
 
 def check_auth(username, password):
+    """多用户验证：从 config.json 中读取 users 列表"""
     auth_config = config.get('auth', {})
     if not auth_config.get('enabled', False):
         return True
-    return username == auth_config.get('username') and password == auth_config.get('password')
+    
+    users = auth_config.get('users', [])
+    for u in users:
+        if u.get('username') == username and u.get('password') == password:
+            # 验证成功，将当前用户名存入 flask 的 g 对象，供日志记录使用
+            from flask import g
+            g.current_user = username
+            g.current_role = u.get('role', 'user')
+            return True
+    return False
 
 def authenticate():
     """发送 401 响应以触发浏览器登录框"""
@@ -203,6 +182,91 @@ def allowed_file(filename):
         filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 
+def perform_backup(prefix="auto"):
+    backup_dir = base_dir / 'backups'
+    backup_dir.mkdir(exist_ok=True)
+    ts = datetime.now().strftime('%Y-%m-%d' if prefix == "auto" else '%Y%m%d_%H%M%S')
+    target = backup_dir / f"mice_{prefix}_{ts}.db"
+    if prefix == "auto" and target.exists(): return
+    try:
+        shutil.copy2(db_path, target)
+        files = sorted(glob.glob(str(backup_dir / f"mice_{prefix}_*.db")))
+        while len(files) > 5: os.remove(files.pop(0))
+    except Exception as e: logger.error(f"Backup Error: {e}")
+
+@app.before_request
+def trigger_backup_on_write():
+    if request.method in ['POST', 'PUT', 'DELETE'] and '/api/' in request.path:
+        perform_backup("auto")
+
+def log_action(action, table, target_id, detail, old=None, new=None):
+    try:
+        from flask import g
+        curr_user = getattr(g, 'current_user', 'System')
+        new_log = OperationLog(
+            username=curr_user,
+            action=action,
+            target_table=table,
+            target_id=str(target_id),
+            detail=detail,
+            old_data=old,
+            new_data=new
+        )
+        db.session.add(new_log)
+    except Exception as e:
+        logger.error(f"Failed to write log: {e}")
+
+@app.route('/api/database/backup/manual', methods=['POST'])
+def manual_backup():
+    perform_backup("manual")
+    log_action('BACKUP', 'database', 'manual', "用户触发了手动数据库备份")
+    db.session.commit()
+    return jsonify({'message': 'Success'})
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    logs = OperationLog.query.order_by(OperationLog.timestamp.desc()).limit(100).all()
+    return jsonify([l.to_dict() for l in logs])
+
+@app.route('/api/database/backups', methods=['GET'])
+def get_backup_list():
+    """获取所有可用的备份文件列表"""
+    backup_dir = os.path.join(base_dir, 'backups')
+    if not os.path.exists(backup_dir):
+        return jsonify({'auto': [], 'manual': []}), 200
+        
+    try:
+        auto_backups = []
+        manual_backups = []
+        
+        # 遍历 backups 文件夹
+        for file_path in glob.glob(os.path.join(backup_dir, "*.db")):
+            file_name = os.path.basename(file_path)
+            stat = os.stat(file_path)
+            file_info = {
+                'name': file_name,
+                'size_mb': round(stat.st_size / (1024 * 1024), 2),
+                'created_at': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            if file_name.startswith('mice_auto_'):
+                auto_backups.append(file_info)
+            elif file_name.startswith('mice_manual_'):
+                manual_backups.append(file_info)
+                
+        # 按时间倒序排列（最新的在最前面）
+        auto_backups.sort(key=lambda x: x['created_at'], reverse=True)
+        manual_backups.sort(key=lambda x: x['created_at'], reverse=True)
+        
+        return jsonify({
+            'auto': auto_backups,
+            'manual': manual_backups
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"获取备份列表失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+    
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
@@ -211,12 +275,12 @@ def index():
 def static_files(path):
     return app.send_static_file(path)
 
-def check_and_shutdown():
-    """检查并关闭服务器"""
-    # 如果一段时间内没有心跳
-    if (time.time() - last_heartbeat) > 20:
-        logger.info("无活动客户端，正在关闭服务器...")
-        sys.exit(0)
+# def check_and_shutdown():
+#     """检查并关闭服务器"""
+#     # 如果一段时间内没有心跳
+#     if (time.time() - last_heartbeat) > 20:
+#         logger.info("无活动客户端，正在关闭服务器...")
+#         sys.exit(0)
 
 @app.route('/heartbeat', methods=['POST'])
 def heartbeat():
@@ -351,7 +415,10 @@ def add_mouse():
                     experiment_id=t
                 )
                 db.session.add(exp)
+
+        log_action('CREATE', 'mouse', mouse.id, f"添加了新小鼠 {mouse.id}", None, mouse.to_dict())
         db.session.commit()
+
         return jsonify({
             'tid': mouse.tid,
             'id': mouse.id,
@@ -378,6 +445,7 @@ def update_mouse(mouse_tid):
     """更新小鼠信息"""
     data = request.json
     mouse = Mouse.query.get_or_404(mouse_tid)
+    old_snapshot = mouse.to_dict()
     try:
         if 'id' in data and data['id']:
             new_id = data['id']
@@ -441,6 +509,9 @@ def update_mouse(mouse_tid):
                     parent_type='mother'
                 )
                 db.session.add(parent)
+        db.session.flush() # 刷新 session 使得修改生效但未提交
+        new_snapshot = mouse.to_dict() # 记录修改后状态
+        log_action('UPDATE', 'mouse', mouse.id, f"修改了小鼠 {mouse.id} 的信息", old_snapshot, new_snapshot)
         db.session.commit()
         return jsonify(), 201
     except Exception as e:
@@ -452,6 +523,7 @@ def update_mouse(mouse_tid):
 def delete_mouse(mouse_tid):
     """删除小鼠及其相关记录"""
     mouse = Mouse.query.get_or_404(mouse_tid)
+    mid = mouse.id
     try:
         Genotype.query.filter_by(mouse_id=mouse_tid).delete()
         StatusRecord.query.filter_by(mouse_id=mouse_tid).delete()
@@ -460,6 +532,7 @@ def delete_mouse(mouse_tid):
         WeightRecord.query.filter_by(mouse_id=mouse_tid).delete()
         ExperimentClass.query.filter_by(mouse_id=mouse_tid).delete()
         db.session.delete(mouse)
+        log_action('DELETE', 'mouse', mid, f"删除了小鼠 {mid}")
         db.session.commit()
         return jsonify({'message': 'Mouse deleted successfully'})
     except Exception as e:
@@ -643,6 +716,8 @@ def add_cage():
             mice_genotype=data.get('mice_genotype')
         )
         db.session.add(cage)
+        db.session.flush()
+        log_action('CREATE', 'cage', cage.cage_id, f"在区域 {cage.section} 创建了新笼位 {cage.cage_id}")
         db.session.commit()
         return jsonify({'id': cage.id}), 201
     except Exception as e:
@@ -653,11 +728,16 @@ def add_cage():
 def move_mouse():
     data = request.json
     mouse = Mouse.query.get_or_404(data['mouse_id'])
+    target_cage_id = data['cage_id']
+    old_cage_name = mouse.cage.display() if mouse.cage else "临时区"
     try:
         if data['cage_id'] == -1:
             mouse.cage_id = None
+            new_cage_name = "临时区"
         else:
             mouse.cage_id = data['cage_id']
+            new_cage_name = Cage.query.get(target_cage_id).display()
+        log_action('MOVE', 'mouse', mouse.id, f"小鼠 {mouse.id} 从 {old_cage_name} 移至 {new_cage_name}")
         db.session.commit()
         return jsonify({'message': f'Mouse {data["mouse_id"]} moved to cage {data["cage_id"]}'})
     except Exception as e:
@@ -668,12 +748,14 @@ def move_mouse():
 @app.route('/api/cages/<int:cage_id>', methods=['DELETE'])
 def delete_cage(cage_id):
     cage = Cage.query.get_or_404(cage_id)
+    c_name = cage.display()
     try:
         # 将该笼位中的所有小鼠移动到临时区
         mice = Mouse.query.filter_by(cage_id=cage_id).all()
         for mouse in mice:
             mouse.cage_id = None
         db.session.delete(cage)
+        log_action('DELETE', 'cage', c_name, f"删除了笼位 {c_name}，组内小鼠已自动移入临时区")
         db.session.commit()
         return jsonify({'message': f'Cage {cage_id} deleted successfully'})
     except Exception as e:
@@ -3327,6 +3409,100 @@ def change_display_setting(type):
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4)
     return jsonify(), 200
+
+@app.route('/api/logs', methods=['GET'])
+def get_operation_logs():
+    """获取操作日志列表（管理员可用）"""
+    from flask import g
+    if getattr(g, 'current_role', 'user') != 'admin':
+        return jsonify({'error': '需要管理员权限'}), 403
+        
+    limit = request.args.get('limit', 50, type=int)
+    logs = OperationLog.query.order_by(OperationLog.id.desc()).limit(limit).all()
+    return jsonify([l.to_dict() for l in logs])
+
+@app.route('/api/rollback', methods=['POST'])
+def rollback_last_action():
+    """
+    回退最近的一步操作。
+    如果是 UPDATE，则用 old_data 覆盖回去。
+    如果是 CREATE，则删除该条记录。
+    如果是 DELETE，则将 old_data 重新插入。
+    """
+    from flask import g
+    if getattr(g, 'current_role', 'user') != 'admin':
+        return jsonify({'error': '需要管理员权限才能执行回退'}), 403
+
+    try:
+        # 获取最后一条未被撤销的操作（这里简化处理，直接取最新一条）
+        last_log = OperationLog.query.order_by(OperationLog.id.desc()).first()
+        
+        if not last_log:
+            return jsonify({'error': '没有可供回退的操作日志'}), 404
+
+        # 我们目前只演示回退 'mouse' 表的操作，以避免复杂的联表外键冲突
+        if last_log.target_table != 'mouse':
+            return jsonify({'error': '当前仅支持回退小鼠的基本信息操作'}), 400
+
+        if last_log.action == 'UPDATE':
+            # 回退更新：根据 old_data 恢复
+            mouse = Mouse.query.get(last_log.target_id)
+            if mouse and last_log.old_data:
+                # 恢复基础字段
+                mouse.id = last_log.old_data.get('id', mouse.id)
+                mouse.sex = last_log.old_data.get('sex', mouse.sex)
+                mouse.live_status = last_log.old_data.get('live_status', mouse.live_status)
+                mouse.strain = last_log.old_data.get('strain', mouse.strain)
+                
+                if last_log.old_data.get('birth_date'):
+                    mouse.birth_date = datetime.fromisoformat(last_log.old_data['birth_date']).date()
+                if last_log.old_data.get('death_date'):
+                    mouse.death_date = datetime.fromisoformat(last_log.old_data['death_date']).date()
+                    
+                # 记录这是一次回退操作
+                reverse_log = OperationLog(
+                    username=getattr(g, 'current_user', 'System') + " (Undo)",
+                    action='UPDATE',
+                    target_table='mouse',
+                    target_id=mouse.tid,
+                    old_data=mouse.to_dict(), # 现在的状态变成 old_data
+                    new_data=last_log.old_data # 回退的目标变成 new_data
+                )
+                db.session.add(reverse_log)
+
+        elif last_log.action == 'CREATE':
+            # 回退创建：即删除刚创建的小鼠
+            mouse = Mouse.query.get(last_log.target_id)
+            if mouse:
+                Genotype.query.filter_by(mouse_id=mouse.tid).delete()
+                Pedigree.query.filter_by(mouse_id=mouse.tid).delete()
+                Pedigree.query.filter_by(parent_id=mouse.tid).delete()
+                db.session.delete(mouse)
+                
+                reverse_log = OperationLog(
+                    username=getattr(g, 'current_user', 'System') + " (Undo)",
+                    action='DELETE',
+                    target_table='mouse',
+                    target_id=last_log.target_id,
+                    old_data=last_log.new_data,
+                    new_data=None
+                )
+                db.session.add(reverse_log)
+
+        elif last_log.action == 'DELETE':
+            return jsonify({'error': '由于涉及到基因型和血统外键，暂不支持直接通过日志无损回退删除操作。请使用自动备份的 .db 文件恢复数据。'}), 400
+
+        # 从日志链中移除该原始日志，防止重复回退
+        db.session.delete(last_log)
+        db.session.commit()
+        
+        return jsonify({'message': '最后一步操作已成功回退', 'rolled_back_log_id': last_log.id}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"回退操作失败: {str(e)}")
+        return jsonify({'error': f'回退失败: {str(e)}'}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5111)
