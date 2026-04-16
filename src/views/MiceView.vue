@@ -608,12 +608,26 @@
           </div>
         </div>
 
-        <div class="form-group">
-          <span style="margin-right: 20px;">创建数量：{{ newMice.length }}</span>
-          <button @click="addInputField" >
-            <i class="material-icons">add</i>
-          </button>
+
+        <div class="batch-id-generator-row">
+          <div class="count-info">
+            <span>创建数量：<strong>{{ newMice.length }}</strong></span>
+            <button type="button" @click="addInputField" class="add-line-btn">
+              <i class="material-icons">add</i>
+            </button>
+          </div>
+          
+          <div class="batch-range-tool">
+            <span class="range-label">批量起止ID:</span>
+            <input v-model="batchRange.start" placeholder="起始 (如Z01)" class="range-input">
+            <span class="range-dash">-</span>
+            <input v-model="batchRange.end" placeholder="截止 (如Z10)" class="range-input">
+            <button type="button" @click="generateBatchIds" class="range-confirm-btn">
+              生成
+            </button>
+          </div>
         </div>
+
         <div v-for="(m, index) in newMice" :key="index" class="input-row">
           <input v-model="m.id" placeholder="ID">
           <select v-model="m.sex">
@@ -664,6 +678,54 @@ const { experiments } = storeToRefs(experimentStore)
 const settingStore = useSettingStore()
 const {showColumns} = storeToRefs(settingStore)
 
+const batchRange = reactive({
+  start: '',
+  end: ''
+})
+
+const generateBatchIds = () => {
+  const start = batchRange.start.trim();
+  const end = batchRange.end.trim();
+  if (!start || !end) {
+    toast.info('请输入起止ID');
+    return;
+  }
+
+  // 正则匹配前缀和数字
+  const regex = /^([A-Za-z]*)(\d+)$/;
+  const startMatch = start.match(regex);
+  const endMatch = end.match(regex);
+
+  if (!startMatch || !endMatch || startMatch[1] !== endMatch[1]) {
+    toast.error('ID格式不匹配（前缀需相同）');
+    return;
+  }
+
+  const prefix = startMatch[1];
+  const startNum = parseInt(startMatch[2], 10);
+  const endNum = parseInt(endMatch[2], 10);
+  const padding = startMatch[2].length;
+
+  if (startNum > endNum) {
+    toast.error('起始ID不能大于截止ID');
+    return;
+  }
+
+  const generated = [];
+  for (let i = startNum; i <= endNum; i++) {
+    const newId = prefix + String(i).padStart(padding, '0');
+    if (!newMice.value.some(m => m.id === newId)) {
+      generated.push({ 
+        id: newId, 
+        sex: 'U' // 默认为未知性别
+      });
+    }
+  }
+
+  newMice.value = [...newMice.value, ...generated];
+  toast.success(`成功生成 ${generated.length} 只小鼠`);
+  batchRange.start = ''; batchRange.end = '';
+}
 
 // 响应式数据
 const filteredMice = ref([])
@@ -1310,6 +1372,8 @@ const closeModal = () => {
   selectedTestsDone.value = []
   selectedTestsPlanned.value = []
   cageQuery.value = ''
+  batchRange.start = ''
+  batchRange.end = ''
 }
 
 const saveMouse = async () => {
@@ -2389,4 +2453,89 @@ onMounted(async () => {
   background-color: #f8f9fa;
   border-radius: 8px;
 }
+
+/* 容器：显著增加上下行间距 */
+.batch-id-generator-row {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+  margin: 25px 0 !important;
+  padding: 15px !important;
+  background-color: #f8fafc !important;
+  border-radius: 8px !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+/* 内部工具条：强制单行显示，增加元件间空格 */
+.batch-range-tool {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 20px !important; /* 每个元件之间的空格 */
+}
+
+.range-label {
+  font-weight: 600 !important;
+  color: #334155 !important;
+  white-space: nowrap !important;
+}
+
+/* 宽输入框，且不换行 */
+.range-input {
+  width: 130px !important; /* 宽度增加 */
+  height: 38px !important;
+  padding: 0 12px !important;
+  border: 1.5px solid #cbd5e0 !important;
+  border-radius: 6px !important;
+  text-align: center !important;
+  font-family: monospace !important;
+  display: inline-block !important;
+  flex: none !important;
+}
+
+.range-dash {
+  font-weight: bold !important;
+  color: #94a3b8 !important;
+}
+
+/* 生成按钮：无Icon，大边距，大边框 */
+.range-confirm-btn {
+  height: 38px !important;
+  padding: 0 25px !important;
+  background-color: #4a9bff !important;
+  color: white !important;
+  border: 2px solid #2c6fbb !important; /* 显著的大边框 */
+  border-radius: 6px !important;
+  font-weight: bold !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 0.2s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.range-confirm-btn:hover {
+  background-color: #3a8beb !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+}
+
+.count-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.add-line-btn {
+  background: white;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 2px 6px;
+  display: flex;
+  align-items: center;
+}
+
 </style>
