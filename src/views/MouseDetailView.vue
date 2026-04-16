@@ -33,7 +33,7 @@
           </div>
           <div class="info-row">
             <span class="info-label">性别:</span>
-            <span class="info-value">{{ mouseData.sex === 'M' ? '雄性' : '雌性' }}</span>
+            <span class="info-value">{{ mouseData.sex === 'M' ? '雄性' : (mouseData.sex === 'F' ? '雌性' : '未知') }}</span>
           </div>
         </div>
           <div class="info-row">
@@ -700,7 +700,7 @@ const renderPedigreeChart = async () => {
           <div>ID: ${d.name}</div>
           <div>生日: ${formatDate(d.birth_date)}</div>
           <div>基因型: ${d.genotype.symbol || '未知'}</div>
-          <div>性别: ${d.sex === 'M' ? '雄性' : d.sex === 'F' ? '雌性' : '未知'}</div>
+          <div>性别: ${d.sex === 'M' ? '雄性' : (d.sex === 'F' ? '雌性' : '未知')}</div>
           `)
           .style('visibility', 'visible')
           .style('left', (event.pageX + 10) + 'px')

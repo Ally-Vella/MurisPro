@@ -1642,6 +1642,13 @@ def import_mice_data(df, result, conflict_resolution):
             # 处理基因型
             genotype_str = str(row['genotype']).strip() if pd.notna(row['genotype']) else None
 
+            # deal with sex
+            sex_val = str(row['sex']).strip().upper()
+            if '未知' in sex_val or sex_val == 'U' or sex_val == 'UNKNOWN':
+                final_sex = 'U'
+            else:
+                final_sex = sex_val[0] if sex_val else 'U'
+
             mouse = Mouse.query.filter_by(id=row['id']).filter_by(birth_date=birth_date).first()
             if mouse:
                 if conflict_resolution == 'skip':
@@ -1649,7 +1656,9 @@ def import_mice_data(df, result, conflict_resolution):
                     continue
                 elif conflict_resolution == 'overwrite':
                     # 更新基本字段
-                    mouse.sex = str(row['sex']).upper()[0]
+                    # mouse.sex = str(row['sex']).upper()[0]
+                    
+                    mouse.sex = final_sex
                     mouse.live_status = int(row.get('live_status', 1))
 
                     deal_with_genotype(genotype_str, mouse.tid)
@@ -1657,7 +1666,7 @@ def import_mice_data(df, result, conflict_resolution):
                 # 创建新小鼠
                 mouse = Mouse(
                     id=row['id'],
-                    sex=str(row['sex']).upper()[0],  # 只取第一个字母
+                    sex=final_sex,  # 只取第一个字母
                     birth_date=birth_date,
                     live_status=int(row.get('live_status', 1)),
                     tests_planned = []
@@ -3245,7 +3254,7 @@ def analyse_rule(rule):
             return []
     elif rule['Rtype'] == 'sex':
         value = rule.get('value')
-        if value in ['M', 'F']:
+        if value in ['M', 'F', 'U']:
             return [r.tid for r in Mouse.query.filter(Mouse.sex == value).all()]
     elif rule['Rtype'] == 'strain':
         value = rule.get('value')

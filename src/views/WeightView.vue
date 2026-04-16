@@ -115,7 +115,7 @@
             <div class="mouse-info">
             <p>ID: {{ selectedMouse.id }}</p>
             <p>基因型: {{ selectedMouse.genotype }}</p>
-            <p>性别: {{ selectedMouse.sex === 'M' ? '雄性' : '雌性' }}</p>
+            <p>性别: {{ selectedMouse.sex === 'M' ? '雄性' : (selectedMouse.sex === 'F' ? '雌性' : '未知') }}</p>
             <p>生日: {{ formatDate(selectedMouse.birth_date) }}</p>
             </div>
         </div>

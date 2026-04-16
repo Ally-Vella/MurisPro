@@ -4,7 +4,7 @@
     <div class="section">
       <div class="header-with-button">
         <h2>小鼠管理</h2>
-        <h3>当前筛选小鼠为{{filteredMice.length}}只，其中雄性小鼠{{filteredMice.filter(m=>m.sex==='M').length}}只、雌性小鼠{{filteredMice.filter(m=>m.sex==='F').length}}只</h3>
+        <h3>当前筛选小鼠为{{filteredMice.length}}只，其中雄性小鼠{{filteredMice.filter(m=>m.sex==='M').length}}只、雌性小鼠{{filteredMice.filter(m=>m.sex==='F').length}}只、性别未知小鼠{{filteredMice.filter(m=>m.sex==='U').length}}只</h3>
         <button @click="openModal('add')" class="add-button">
           <i class="material-icons">add</i>
           添加新小鼠
@@ -138,6 +138,7 @@
                 <option value="">全部</option>
                 <option value="M">雄性</option>
                 <option value="F">雌性</option>
+                <option value="U">未知</option>
               </select>
             </th>
             <th v-if="showColumns.birth_date"><input type="date" v-model="filters.birth_date" @change="applyFilters"></th>
@@ -193,8 +194,8 @@
             <td v-if="showColumns.genotype" v-html="mouse.genotype.symbol"></td>
             <td v-if="showColumns.strain">{{ mouse.strain }}</td>
             <td v-if="showColumns.sex">
-              <div class="mouse-sex" :class="mouse.sex === 'F' ? 'sex-female' : 'sex-male'">
-                {{ mouse.sex === 'F' ? '♀' : '♂' }}
+              <div class="mouse-sex" :class="mouse.sex === 'F' ? 'sex-female' : (mouse.sex === 'M' ? 'sex-male' : 'sex-unknown')">
+                {{ mouse.sex === 'F' ? '♀' : (mouse.sex === 'M' ? '♂' : '?') }}
               </div>
             </td>
             <td v-if="showColumns.birth_date">{{ mouse.birth_date }}</td>
@@ -334,6 +335,7 @@
             <select v-model="formData.sex">
               <option value="M">雄性</option>
               <option value="F">雌性</option>
+              <option value="U">未知</option>
             </select>
           </div>
 
@@ -617,6 +619,7 @@
           <select v-model="m.sex">
             <option value="M">雄性</option>
             <option value="F">雌性</option>
+            <option value="U">未知</option>
           </select>
           <button type="button" class="remove-btn" @click="removeField(index)">移除</button>
         </div>
@@ -1595,6 +1598,13 @@ const formatDate = (dateString) => {
   return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
 }
 
+const formatSex = (sex) => {
+    if (sex === 'M') return '雄性';
+    if (sex === 'F') return '雌性';
+    if (sex === 'U') return '未知';
+    return sex;
+};
+
 const addInputField = () => {
   newMice.value.push({ id: '', sex: templateMouse.value.sex })
 }
@@ -2366,6 +2376,10 @@ onMounted(async () => {
 
 .sex-male {
   background-color: #2196f3;
+}
+
+.sex-unknown {
+  background-color: #94a3b8;
 }
 
 .genotype-filter {

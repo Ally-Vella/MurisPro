@@ -39,8 +39,8 @@
             :class="{ active: index === currentResultIndex }"
             @click="selectSearchResult(result, index)"
           >
-            <div class="mouse-sex" :class="result.mouse.sex === 'F' ? 'sex-female' : 'sex-male'">
-              {{ result.mouse.sex === 'F' ? '♀' : '♂' }}
+            <div class="mouse-sex" :class="getSexClass(result.mouse.sex)">
+              {{ formatSexIcon(result.mouse.sex) }}
             </div>
             <div class="result-info">
               <div class="mouse-id">{{ result.mouse.id }}</div>
@@ -137,8 +137,8 @@
                 @dragstart="handleDragStart($event, mouse.tid, cage.id)"
                 @dblclick="openMouseDetail(mouse.tid)"
               >
-                <div class="mouse-sex" :class="mouse.sex === 'F' ? 'sex-female' : 'sex-male'">
-                  {{ mouse.sex === 'F' ? '♀' : '♂' }}
+                <div class="mouse-sex" :class="getSexClass(mouse.sex)">
+                  {{ formatSexIcon(mouse.sex) }}
                 </div>
                 <div class="mouse-info">
                   <div class="mouse-id">{{ mouse.id }}</div>
@@ -181,8 +181,8 @@
             @dragstart="handleDragStart($event, mouse.tid, -1)"
             @dblclick="openMouseDetail(mouse.tid)"
           >
-            <div class="mouse-sex" :class="mouse.sex === 'F' ? 'sex-female' : 'sex-male'">
-              {{ mouse.sex === 'F' ? '♀' : '♂' }}
+            <div class="mouse-sex" :class="getSexClass(mouse.sex)">
+              {{ formatSexIcon(mouse.sex) }}
             </div>
             <div class="mouse-info">
               <div class="mouse-id">{{ mouse.id }}</div>
@@ -271,6 +271,7 @@
         <select v-model="currentCage.mice_sex">
           <option value="M">雄性</option>
           <option value="F">雌性</option>
+          <option value="U">未知</option>
           <option value="Mixed">混合</option>
         </select>
       </div>
@@ -413,6 +414,18 @@ const sortedSections = computed({
     locations.value = updated
   }
 })
+
+const getSexClass = (sex) => {
+  if (sex === 'F') return 'sex-female';
+  if (sex === 'M') return 'sex-male';
+  return 'sex-unknown'; // 处理 'U' 或其他
+};
+
+const formatSexIcon = (sex) => {
+  if (sex === 'F') return '♀';
+  if (sex === 'M') return '♂';
+  return '?'; // 未知性别显示问号
+};
 
 // 生命周期钩子
 onMounted(async () => {
@@ -859,8 +872,8 @@ const renderPDFContent = (cages, sectionName) => {
           mouseItem.className = 'pdf-mouse-item';
           
           const mouseSex = document.createElement('div');
-          mouseSex.className = `pdf-mouse-sex ${mouse.sex === 'F' ? 'sex-female' : 'sex-male'}`;
-          mouseSex.textContent = mouse.sex === 'F' ? '♀' : '♂';
+          mouseSex.className = `pdf-mouse-sex ${mouse.sex === 'F' ? 'sex-female' : (mouse.sex === 'M' ? 'sex-male' : 'sex-unknown')}`;
+          mouseSex.textContent = mouse.sex === 'F' ? '♀' : (mouse.sex === 'M' ? '♂' : '?');
           
           const mouseInfo = document.createElement('div');
           mouseInfo.className = 'pdf-mouse-info';
@@ -1277,6 +1290,10 @@ function isCageHighlighted(cageId) {
 
 .sex-male {
   background-color: #2196f3;
+}
+
+.sex-unknown {
+  background-color: #94a3b8;
 }
 
 .mouse-info {

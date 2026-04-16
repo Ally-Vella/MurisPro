@@ -8,7 +8,7 @@ class Mouse(db.Model):
 
     tid = db.Column(db.Integer, primary_key=True)
     id = db.Column(db.String(10), nullable=False)
-    sex = db.Column(db.String(1))  # 'M' or 'F'
+    sex = db.Column(db.String(1))  # 'M' or 'F' or 'U'
     live_status = db.Column(db.Integer, default=1)  # 1 for '活', 0 for '死', 2 for '解剖', 3 for '意外消失', 4 for '丢弃'
     birth_date = db.Column(db.Date)
     death_date = db.Column(db.Date)
