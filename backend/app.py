@@ -570,8 +570,12 @@ def delete_batch_mice():
     mice_ids_param = request.args.getlist('miceIds[]')
     mice_ids = [int(id.strip()) for id in mice_ids_param] if mice_ids_param else []
     try:
+        deleted_ids = [] # 用于收集被删除的ID以记录日志
+        
         for mouse_tid in mice_ids:
             mouse = Mouse.query.get_or_404(mouse_tid)
+            deleted_ids.append(mouse.id) # 收集ID
+            
             Genotype.query.filter_by(mouse_id=mouse_tid).delete()
             StatusRecord.query.filter_by(mouse_id=mouse_tid).delete()
             Pedigree.query.filter_by(mouse_id=mouse_tid).delete()
@@ -579,6 +583,12 @@ def delete_batch_mice():
             WeightRecord.query.filter_by(mouse_id=mouse_tid).delete()
             ExperimentClass.query.filter_by(mouse_id=mouse_tid).delete()
             db.session.delete(mouse)
+            
+        # --- 写入批量删除日志 ---
+        if deleted_ids:
+            log_action('DELETE', 'mouse', f"Batch({len(deleted_ids)})", 
+                       f"批量删除了 {len(deleted_ids)} 只小鼠: {', '.join(deleted_ids)}")
+                       
         db.session.commit()
         return jsonify({'message': 'Mouse deleted successfully'})
     except Exception as e:
@@ -594,6 +604,9 @@ def add_mice_from_template(mouse_tid):
         template_mouse = Mouse.query.get_or_404(mouse_tid)
         template_mouse_parent = Pedigree.query.filter_by(mouse_id=mouse_tid).all()
         genes = Genotype.query.filter_by(mouse_id=mouse_tid).all()
+        
+        created_ids = [] # 用于收集新建的小鼠ID
+        
         for m in data:
             new_mouse_data = template_mouse.to_dict()
             # 移除不需要继承的字段（如主键、创建时间等）
@@ -607,6 +620,9 @@ def add_mice_from_template(mouse_tid):
             new_mouse = Mouse(**new_mouse_data)
             db.session.add(new_mouse)
             db.session.flush()
+            
+            created_ids.append(m['id']) # 收集ID
+            
             for g in genes:
                 new_gene = Genotype(
                     mouse_id=new_mouse.tid,
@@ -621,6 +637,13 @@ def add_mice_from_template(mouse_tid):
                     parent_id=p.parent_id,
                     parent_type=p.parent_type)
                 db.session.add(new_parent)
+                
+        # --- 写入批量创建日志 ---
+        if created_ids:
+            log_action('CREATE', 'mouse', f"Batch({len(created_ids)})", 
+                       f"基于模板小鼠({template_mouse.id})批量添加了 {len(created_ids)} 只小鼠: {', '.join(created_ids)}", 
+                       None, data)
+                       
         db.session.commit()
         return jsonify(), 201
     except Exception as e:
@@ -636,11 +659,15 @@ def batch_experiments_change():
         mice_ids = data.get("miceIds", [])
         test_ids = data.get("testIds", [])
         operation = data.get("batchTest", "")
+        
+        mouse_names = [] # 用于记录受影响的小鼠
+        
         if operation == "完成实验":
             for mtid in mice_ids:
                 m = Mouse.query.get_or_404(mtid)
                 if not m:
                     continue
+                mouse_names.append(m.id)
                 if m.tests_done:
                     m.tests_done.delete()
                 for test_id in test_ids:
@@ -654,14 +681,26 @@ def batch_experiments_change():
                 m = Mouse.query.get_or_404(mtid)
                 if not m:
                     continue
+                mouse_names.append(m.id)
                 m.tests_planned = test_ids
+                
+        # 获取实验名称用于日志详细描述
+        test_names = []
+        for tid in test_ids:
+            t = ExperimentType.query.get(tid)
+            if t: test_names.append(t.name)
+            
+        # --- 写入批量修改实验日志 ---
+        if mouse_names:
+            log_action('UPDATE', 'mouse', f"Batch({len(mice_ids)})", 
+                       f"批量执行操作 '{operation}': 涉及小鼠 [{', '.join(mouse_names)}], 涉及实验 [{', '.join(test_names)}]")
+                       
         db.session.commit()
         return jsonify(), 201
     except Exception as e:
         db.session.rollback()
         logger.error(f"批量修改小鼠任务状态失败: {str(e)}")
         return jsonify({'error': str(e)}), 400
-
 
 
 ##笼位视图
