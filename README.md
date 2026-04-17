@@ -267,3 +267,12 @@ animal-lab-management/
 ---
 
 **注意**: 本项目仍在积极开发中，API和功能可能会有变动。
+
+
+## Fork roadmap
+
+- [ ] add mouse from cage
+- [x] add sex 'unknown'
+- [x] mouse id editable
+- [x] Log system
+- [x] batch create mouse from range of ids
