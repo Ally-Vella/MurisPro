@@ -717,7 +717,7 @@ const generateBatchIds = () => {
     if (!newMice.value.some(m => m.id === newId)) {
       generated.push({ 
         id: newId, 
-        sex: 'U' // 默认为未知性别
+        sex: 'M' // 默认为未知性别
       });
     }
   }
