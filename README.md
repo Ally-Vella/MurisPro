@@ -276,3 +276,5 @@ animal-lab-management/
 - [x] mouse id editable
 - [x] Log system
 - [x] batch create mouse from range of ids
+- [ ] 笼位视图拉长
+- [ ] 小鼠批量操作
