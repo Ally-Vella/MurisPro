@@ -278,3 +278,4 @@ animal-lab-management/
 - [x] batch create mouse from range of ids
 - [ ] 笼位视图拉长
 - [ ] 小鼠批量操作
+- [ ] 小鼠添加筛选列：已完成测试、计划进行测试
