@@ -212,6 +212,9 @@
           <li @click="openCageModal(cageContextMenu.cage)">
               <i class="material-icons">edit</i> 编辑笼位信息
           </li>
+          <li @click="openAddMouseFromCage(cageContextMenu.cage)">
+              <i class="material-icons">add</i> 添加小鼠
+          </li>
           <li @click="exchangeCage(cageContextMenu.cage)">
               <i class="material-icons">swap_horiz</i> 笼位排序互换
           </li>
@@ -351,10 +354,12 @@ defineOptions({
 
 import { useCageStore } from '@/stores'
 import { storeToRefs } from 'pinia'
+import { useRouter } from 'vue-router'
 
 const cageStore = useCageStore()
 const {locations, activeSection, cages} = storeToRefs(cageStore)
 const {fetchCages} = cageStore
+const router = useRouter()
 
 // 响应式状态
 const temporaryMice = ref([])
@@ -616,6 +621,18 @@ function openCageContextMenu(event, cage) {
 function closeContextMenu() {
   cageContextMenu.visible = false
   document.removeEventListener('click', closeContextMenu)
+}
+
+function openAddMouseFromCage(cage) {
+  if (!cage) return
+  closeContextMenu()
+  router.push({
+    name: 'mice',
+    query: {
+      action: 'add',
+      cageId: cage.id
+    }
+  })
 }
 
 // 更新笼位信息

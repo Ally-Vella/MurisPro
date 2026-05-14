@@ -663,6 +663,7 @@ import 'vue3-toastify/dist/index.css'
 import MouseDetailModal from './MouseDetailView.vue'
 import { useGeneStore, useCageStore, useExperimentStore, useSettingStore } from '@/stores'
 import { storeToRefs } from 'pinia'
+import { useRoute, useRouter } from 'vue-router'
 
 const geneStore = useGeneStore()
 const { mice, loading, genotypes, selectedGenes, alleleSuggestions } = storeToRefs(geneStore)
@@ -677,6 +678,8 @@ const { experiments } = storeToRefs(experimentStore)
 
 const settingStore = useSettingStore()
 const {showColumns} = storeToRefs(settingStore)
+const route = useRoute()
+const router = useRouter()
 
 const batchRange = reactive({
   start: '',
@@ -1280,7 +1283,7 @@ const validateMouse = (mouse) => {
   return true
 }
 
-const openModal = async (mode, mouse = null) => {
+const openModal = async (mode, mouse = null, options = {}) => {
   modalMode.value = mode
   if (mouse){
     if (mouse.genotype.symbol && mouse.genotype.genes.length > 0) {
@@ -1355,7 +1358,34 @@ const openModal = async (mode, mouse = null) => {
       const ctemp = cages.value.find(cage => cage.id === mouse.cage_id)
       cageQuery.value = `${ctemp.cage_id} - ${ctemp.section}`
     }
+  } else if (mode === 'add' && options.cageId) {
+    const presetCageId = Number(options.cageId)
+    const presetCage = cages.value.find(cage => cage.id === presetCageId)
+    if (presetCage) {
+      formData.cage_id = presetCage.id
+      cageQuery.value = `${presetCage.cage_id} - ${presetCage.section}`
+    } else {
+      toast.warning('未找到对应笼位，请手动选择笼位')
+    }
   }
+}
+
+const openRouteAddMouseModal = async () => {
+  if (route.name !== 'mice' || route.query.action !== 'add') return
+
+  const cageId = Array.isArray(route.query.cageId) ? route.query.cageId[0] : route.query.cageId
+  if (!cageId) return
+
+  if (cages.value.length === 0) {
+    await fetchCages()
+  }
+
+  await openModal('add', null, { cageId })
+
+  const remainingQuery = { ...route.query }
+  delete remainingQuery.action
+  delete remainingQuery.cageId
+  router.replace({ name: 'mice', query: remainingQuery })
 }
 
 const closeModal = () => {
@@ -1744,9 +1774,17 @@ watch(searchTerm, (newVal) => {
 // 生命周期
 onMounted(async () => {
   applyFilters()
+  await openRouteAddMouseModal()
   document.addEventListener('click', closeContextMenu)
   document.addEventListener('click', handleClickOutside)
 })
+
+watch(
+  () => route.query,
+  () => {
+    openRouteAddMouseModal()
+  }
+)
 </script>
 
 <style scoped>

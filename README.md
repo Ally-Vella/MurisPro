@@ -292,7 +292,7 @@ animal-lab-management/
 
 ## Fork roadmap
 
-- [ ] add mouse from cage
+- [x] add mouse from cage
 - [x] add sex 'unknown'
 - [x] mouse id editable
 - [x] Log system
