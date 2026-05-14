@@ -268,6 +268,27 @@ animal-lab-management/
 
 **注意**: 本项目仍在积极开发中，API和功能可能会有变动。
 
+## 配置测试列显示
+
+默认情况下，小鼠管理表格中已启用"已完成测试"和"计划进行测试"列。如果列未显示，请检查以下配置：
+
+### 后端配置
+编辑 `backend/config.json` 文件，确保以下设置为 `true`：
+
+```json
+"config": {
+    "mouse": {
+        "tests_planned": true,
+        "tests_done": true,
+        ...其他配置
+    }
+}
+```
+
+### 前端配置  
+`src/stores/settingStore.js` 中已设置默认启用这两个列。
+
+修改配置后需要重启后端服务。
 
 ## Fork roadmap
 
@@ -278,4 +299,4 @@ animal-lab-management/
 - [x] batch create mouse from range of ids
 - [ ] 笼位视图拉长
 - [ ] 小鼠批量操作
-- [ ] 小鼠添加筛选列：已完成测试、计划进行测试
+- [x] 小鼠添加筛选列：已完成测试、计划进行测试

@@ -32,8 +32,8 @@ export const useSettingStore = defineStore('setting', () => {
         live_status: true,
 
         death_date: false,
-        tests_planned: false,
-        tests_done: false,
+        tests_planned: true,
+        tests_done: true,
         cage: true
     })
 
@@ -67,8 +67,8 @@ export const useSettingStore = defineStore('setting', () => {
                 weeks_old: true,
                 live_status: true,
                 death_date: false,
-                tests_planned: false,
-                tests_done: false,
+                tests_planned: true,
+                tests_done: true,
                 cage: true
             }
         }
