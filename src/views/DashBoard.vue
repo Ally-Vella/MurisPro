@@ -1091,9 +1091,9 @@ function isCageHighlighted(cageId) {
 .cage-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  grid-auto-rows: 255px;
-  gap: 15px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-auto-rows: 320px;
+  gap: 12px;
   padding: 10px;
   overflow-y: auto;
   background-color: white;
@@ -1189,13 +1189,14 @@ function isCageHighlighted(cageId) {
 .mouse-card {
   display: flex;
   align-items: center;
-  padding: 8px;
-  border-radius: 6px;
+  padding: 5px 8px;
+  border-radius: 4px;
   background-color: #fff8e1;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   border: 1px solid #ffe082;
   transition: all 0.3s;
   cursor: pointer;
+  font-size: 0.85rem;
 }
 
 /* 保持其他样式不变 */
@@ -1220,12 +1221,12 @@ function isCageHighlighted(cageId) {
 .cage-card {
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 15px;
+  padding: 12px;
   background-color: white;
   transition: all 0.2s;
   cursor: pointer;
-  min-height: 250px;
-  max-height: 250px;
+  min-height: 320px;
+  max-height: 320px;
   overflow: hidden;
   position: relative;
   display: flex;
@@ -1249,34 +1250,57 @@ function isCageHighlighted(cageId) {
 
 .cage-id {
   font-weight: 600;
-  font-size: 1.1rem;
-  margin-bottom: 5px;
+  font-size: 1rem;
+  margin-bottom: 3px;
 }
 
 .cage-location {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: #666;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+}
+
+.cage-meta {
+  font-size: 0.75rem;
+  margin-bottom: 5px;
+}
+
+.cage-meta-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.meta-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.meta-value {
+  color: #333;
+  font-weight: 400;
 }
 
 .cage-mouse {
   display: flex;
   align-items: center;
-  margin-top: 8px;
-  padding: 5px;
-  border-radius: 4px;
+  margin-top: 4px;
+  padding: 3px 5px;
+  border-radius: 3px;
   background-color: #f8f9fa;
+  font-size: 0.85rem;
+  line-height: 1.2;
 }
 
 .mouse-sex {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 8px;
-  font-size: 12px;
+  margin-right: 6px;
+  font-size: 10px;
   color: white;
   font-weight: bold;
   flex-shrink: 0; /* 防止在flex容器中缩小 */
@@ -1298,23 +1322,29 @@ function isCageHighlighted(cageId) {
 
 .mouse-info {
   flex-grow: 1;
+  min-width: 0;
 }
 
 .mouse-id {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mouse-genotype {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: #666;
-  max-width: 70px;
-  overflow: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mouse-days {
-  font-size: 1rem;
+  font-size: 0.75rem;
   color: #0a0a0a;
+  white-space: nowrap;
 }
 
 /* 添加悬停效果 */
@@ -1396,7 +1426,7 @@ function isCageHighlighted(cageId) {
   flex-grow: 1;
   overflow-y: auto;
   padding: 5px;
-  max-height: calc(250px - 60px);
+  max-height: calc(320px - 50px);
 }
 
 /* 右键菜单样式 */
@@ -1666,14 +1696,14 @@ function isCageHighlighted(cageId) {
 }
 
 .search-result-item .mouse-sex {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 10px;
-  font-size: 12px;
+  margin-right: 8px;
+  font-size: 10px;
   font-weight: bold;
   flex-shrink: 0;
 }
