@@ -751,6 +751,7 @@ const showModal = ref(false)
 const modalMode = ref('') // 'add', 'edit', 'template'
 const templateMouse = ref(null)
 const newMice = ref([])
+const returnToCageAfterAdd = ref(false)
 const locationCages = computed(() => {
   if (!filters.location) return cages.value
   return cages.value.filter(cage => cage.section === filters.location)
@@ -1380,11 +1381,13 @@ const openRouteAddMouseModal = async () => {
     await fetchCages()
   }
 
+  returnToCageAfterAdd.value = route.query.returnTo === 'cage'
   await openModal('add', null, { cageId })
 
   const remainingQuery = { ...route.query }
   delete remainingQuery.action
   delete remainingQuery.cageId
+  delete remainingQuery.returnTo
   router.replace({ name: 'mice', query: remainingQuery })
 }
 
@@ -1401,6 +1404,7 @@ const closeModal = () => {
   selectedMothers.value = []
   selectedTestsDone.value = []
   selectedTestsPlanned.value = []
+  returnToCageAfterAdd.value = false
   cageQuery.value = ''
   batchRange.start = ''
   batchRange.end = ''
@@ -1459,6 +1463,7 @@ const saveMouse = async () => {
   saving.value = true
   try {
     const api = createAxiosInstance()
+    const shouldReturnToCage = modalMode.value === 'add' && returnToCageAfterAdd.value
     
     if (modalMode.value === 'add') {
       const response = await api.post('/mice', submitData)
@@ -1471,7 +1476,10 @@ const saveMouse = async () => {
     }
     applyFilters()
     closeModal()
-    fetchCages()
+    await fetchCages()
+    if (shouldReturnToCage) {
+      router.push({ name: 'home' })
+    }
   } catch (error) {
     console.error('保存小鼠失败:', error)
     

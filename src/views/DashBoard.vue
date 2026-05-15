@@ -630,7 +630,8 @@ function openAddMouseFromCage(cage) {
     name: 'mice',
     query: {
       action: 'add',
-      cageId: cage.id
+      cageId: cage.id,
+      returnTo: 'cage'
     }
   })
 }
