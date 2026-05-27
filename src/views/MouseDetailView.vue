@@ -62,32 +62,48 @@
             添加记录
           </button>
 
-          <!-- 添加记录表单（内联显示） -->
+          <!-- 添加/编辑记录表单（内联显示） -->
           <div v-else class="add-record-form">
             <div class="form-group">
               <label>记录日期</label>
-              <input type="date" v-model="newRecord.record_date">
+              <input type="date" v-model="recordForm.record_date">
             </div>
             <div class="form-group">
               <label>详细描述</label>
               <textarea 
-                v-model="newRecord.status" 
+                v-model="recordForm.status" 
                 placeholder="输入详细描述..."
                 rows="2"
               ></textarea>
             </div>
             <div class="form-buttons">
-              <button class="btn btn-outline" @click="cancelAddRecord">取消</button>
-              <button class="btn btn-primary" @click="saveNewRecord">保存</button>
+              <button class="btn btn-outline" @click="cancelRecordForm">取消</button>
+              <button class="btn btn-primary" @click="saveRecord">{{ editingRecordId ? '保存修改' : '保存' }}</button>
             </div>
           </div>
 
         <div class="status-content">
           <div v-if="mouseData.status_records && mouseData.status_records.length" class="status-list">
-            <div v-for="record in mouseData.status_records" :key="record.id" class="status-item" :class="{ 'deleting': deletingRecordId === record.id }" @click="setDeletingRecord(record)">
-              <div class="status-date" v-if="record.record_livingdays === -1">导入默认</div>
-              <div class="status-date" v-else>{{ record.record_livingdays }}天时</div>
-              <div class="status-description">{{ record.status }}</div>
+            <div v-for="record in mouseData.status_records" :key="record.id" class="status-item">
+              <div class="status-main">
+                <div class="status-date" v-if="record.record_livingdays === -1">导入默认</div>
+                <div class="status-date" v-else>{{ record.record_livingdays }}天时</div>
+                <div class="status-description">{{ record.status }}</div>
+              </div>
+              <div class="status-actions">
+                <button class="status-action-btn" @click.stop="openEditRecordForm(record)">
+                  <i class="material-icons">edit</i>
+                  修改
+                </button>
+                <button
+                  class="status-action-btn danger"
+                  :disabled="deletingRecordId === record.id"
+                  @click.stop="deleteRecord(record)"
+                >
+                  <i class="material-icons">delete</i>
+                  {{ deletingRecordId === record.id ? '删除中' : '删除' }}
+                </button>
+              </div>
             </div>
           </div>
           <div v-else-if="!showAddRecordForm" class="no-data">
@@ -190,29 +206,22 @@ const fetchMouseData = async () => {
 
 // ========== 状态记录相关 ==========
 const deletingRecordId = ref(null)
-  let clickTimer = null
-  const setDeletingRecord = (record) => {
-  if (deletingRecordId.value === record.id) {
-    deleteRecord(record)
-    return
-  }
-  if (clickTimer) { clearTimeout(clickTimer); clickTimer = null }
-  deletingRecordId.value = record.id
-  clickTimer = setTimeout(() => { deletingRecordId.value = null }, 1000)
-}
+const editingRecordId = ref(null)
 
 const deleteRecord = async (record) => {
+  deletingRecordId.value = record.id
   try {
     const response = await fetch(`/api/status_records/${record.id}`, { method: 'DELETE' })
     if (response.ok) {
       const index = mouseData.value.status_records.findIndex(r => r.id === record.id)
-    if (index !== -1) mouseData.value.status_records.splice(index, 1)
-    console.log('记录删除成功')
+      if (index !== -1) mouseData.value.status_records.splice(index, 1)
+      toast.success('状态记录已删除')
     } else {
-      console.error('删除记录失败')
+      toast.error('删除记录失败')
     }
   } catch (error) {
     console.error('删除记录时出错:', error)
+    toast.error('删除记录失败')
   } finally {
     deletingRecordId.value = null
   }
@@ -220,35 +229,63 @@ const deleteRecord = async (record) => {
 
 // 添加记录表单状态
 const showAddRecordForm = ref(false)
-const newRecord = ref({ record_date: null, status: '' }) 
+const recordForm = ref({ record_date: null, status: '' }) 
+
+const resetRecordForm = () => {
+  recordForm.value = { record_date: null, status: '' }
+  editingRecordId.value = null
+}
 
 const openAddRecordForm = () => {
   // 设置默认日期为今天
   const today = new Date()
   const formattedDate = today.toISOString().split('T')[0]
-  newRecord.value = { record_date: formattedDate, status: '' }
+  resetRecordForm()
+  recordForm.value = { record_date: formattedDate, status: '' }
   showAddRecordForm.value = true
 }
 
-const cancelAddRecord = () => {
-  showAddRecordForm.value = false
+const openEditRecordForm = (record) => {
+  editingRecordId.value = record.id
+  recordForm.value = {
+    record_date: record.record_date,
+    status: record.status
+  }
+  showAddRecordForm.value = true
 }
 
-const saveNewRecord = async () => {
+const cancelRecordForm = () => {
+  showAddRecordForm.value = false
+  resetRecordForm()
+}
+
+const saveRecord = async () => {
   try {
-    const recordToSave = { ...newRecord.value, mouse_tid: currentMouseID.value, birth_date: mouseData.value.birth_date }
-    const response = await fetch(`/api/status_records`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(recordToSave)
-    })
+    if (!recordForm.value.record_date || !recordForm.value.status?.trim()) {
+      toast.error('请填写记录日期和详细描述')
+      return
+    }
+    const recordToSave = { ...recordForm.value, mouse_tid: currentMouseID.value, birth_date: mouseData.value.birth_date }
+    const isEditing = !!editingRecordId.value
+    const response = await fetch(
+      isEditing ? `/api/status_records/${editingRecordId.value}` : `/api/status_records`,
+      {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(recordToSave)
+      }
+    )
+    if (!response.ok) {
+      throw new Error('保存状态记录失败')
+    }
     showAddRecordForm.value = false
-    toast.success('状态记录已添加')
+    resetRecordForm()
+    toast.success(isEditing ? '状态记录已修改' : '状态记录已添加')
     // 刷新数据
     await fetchMouseData()
   } catch (error) {
-    console.error('添加记录失败:', error)
-    toast.error('添加记录失败，请重试')
+    console.error('保存记录失败:', error)
+    toast.error('保存状态记录失败，请重试')
   }
 }
     
@@ -880,19 +917,12 @@ grid-row: 1;
 
 .status-item {
 pointer-events: auto;
-cursor: pointer;
 padding: 8px 12px;
 border: 1px solid #e0e0e0;
 border-radius: 4px;
 margin-bottom: 8px;
 transition: all 0.3s ease;
 position: relative;
-}
-
-.status-item.deleting {
-background-color: #fff5f5;
-border-color: #feb2b2;
-box-shadow: 0 0 0 1px #feb2b2;
 }
 
 .pedigree {
@@ -963,22 +993,71 @@ gap: 12px;
 
 .status-item {
 display: flex;
-align-items: center;
+align-items: flex-start;
+justify-content: space-between;
+gap: 12px;
 padding: 10px;
 background-color: #f8f9fa;
 border-radius: 6px;
 border-left: 3px solid #4285f4;
 }
 
+.status-main {
+display: flex;
+align-items: center;
+gap: 12px;
+flex: 1;
+min-width: 0;
+}
+
 .status-date {
 font-weight: 600;
 color: #4285f4;
-margin-right: 12px;
 min-width: 80px;
 }
 
 .status-description {
 color: #555;
+white-space: pre-wrap;
+word-break: break-word;
+}
+
+.status-actions {
+display: flex;
+align-items: center;
+gap: 8px;
+flex-shrink: 0;
+}
+
+.status-action-btn {
+display: inline-flex;
+align-items: center;
+gap: 4px;
+padding: 6px 10px;
+border: 1px solid #d0d7e2;
+border-radius: 4px;
+background: #fff;
+color: #475569;
+cursor: pointer;
+}
+
+.status-action-btn .material-icons {
+font-size: 16px;
+}
+
+.status-action-btn:hover {
+background: #eef4ff;
+color: #2563eb;
+}
+
+.status-action-btn.danger:hover {
+background: #fff1f2;
+color: #dc2626;
+}
+
+.status-action-btn:disabled {
+opacity: 0.6;
+cursor: not-allowed;
 }
 
 .no-data {
@@ -1130,8 +1209,23 @@ transition: all 0.2s;
     align-items: flex-start;
 }
 
+.status-main,
+.status-actions {
+    width: 100%;
+}
+
+.status-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.status-actions {
+    justify-content: flex-end;
+}
+
 .status-date {
-    margin-bottom: 6px;
+    margin-bottom: 0;
 }
 }
 

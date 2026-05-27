@@ -216,6 +216,198 @@ def log_action(action, table, target_id, detail, old=None, new=None):
     except Exception as e:
         logger.error(f"Failed to write log: {e}")
 
+
+MOUSE_LOG_FIELD_LABELS = {
+    'id': '编号',
+    'sex': '性别',
+    'live_status': '状态',
+    'birth_date': '出生日期',
+    'death_date': '死亡日期',
+    'strain': '品系',
+    'cage_id': '笼位',
+    'genotype': '基因型',
+    'father': '父鼠',
+    'mother': '母鼠',
+    'tests_done': '已完成实验',
+    'tests_planned': '计划实验'
+}
+
+MOUSE_SEX_LABELS = {
+    'M': '雄',
+    'F': '雌',
+    'U': '未知'
+}
+
+MOUSE_STATUS_LABELS = {
+    0: '死',
+    1: '活',
+    2: '解剖',
+    3: '意外消失',
+    4: '丢弃'
+}
+
+
+def get_mouse_parent_tids(mouse_tid, parent_type):
+    return sorted([
+        record.parent_id
+        for record in Pedigree.query.filter_by(mouse_id=mouse_tid, parent_type=parent_type).all()
+    ])
+
+
+def build_mouse_log_snapshot(mouse):
+    snapshot = mouse.to_dict()
+    snapshot['father'] = get_mouse_parent_tids(mouse.tid, 'father')
+    snapshot['mother'] = get_mouse_parent_tids(mouse.tid, 'mother')
+    snapshot['tests_done'] = sorted(snapshot.get('tests_done') or [])
+    snapshot['tests_planned'] = sorted(snapshot.get('tests_planned') or [])
+    return snapshot
+
+
+def format_mouse_log_scalar(value):
+    if value in (None, '', []):
+        return '空'
+    return str(value)
+
+
+def format_mouse_log_cage(cage_id):
+    if cage_id in (None, ''):
+        return '空'
+    cage = Cage.query.get(cage_id)
+    return cage.display() if cage else str(cage_id)
+
+
+def format_mouse_log_parent_list(parent_tids):
+    if not parent_tids:
+        return '空'
+    parents = Mouse.query.filter(Mouse.tid.in_(parent_tids)).all()
+    parent_map = {mouse.tid: mouse.id for mouse in parents}
+    return ', '.join([parent_map.get(tid, str(tid)) for tid in sorted(parent_tids)])
+
+
+def format_mouse_log_experiment_list(experiment_ids):
+    if not experiment_ids:
+        return '空'
+    experiments = ExperimentType.query.filter(ExperimentType.id.in_(experiment_ids)).all()
+    experiment_map = {experiment.id: experiment.name for experiment in experiments}
+    labels = [experiment_map.get(experiment_id, str(experiment_id)) for experiment_id in sorted(experiment_ids)]
+    return ', '.join(labels)
+
+
+def normalize_mouse_log_value(field, value):
+    if field in ('father', 'mother', 'tests_done', 'tests_planned'):
+        return sorted(value or [])
+    return value
+
+
+def format_mouse_log_value(field, value):
+    if field == 'sex':
+        return MOUSE_SEX_LABELS.get(value, format_mouse_log_scalar(value))
+    if field == 'live_status':
+        return MOUSE_STATUS_LABELS.get(value, format_mouse_log_scalar(value))
+    if field == 'cage_id':
+        return format_mouse_log_cage(value)
+    if field in ('father', 'mother'):
+        return format_mouse_log_parent_list(value or [])
+    if field in ('tests_done', 'tests_planned'):
+        return format_mouse_log_experiment_list(value or [])
+    return format_mouse_log_scalar(value)
+
+
+def build_mouse_log_changes(old_data, new_data):
+    changes = []
+    for field, label in MOUSE_LOG_FIELD_LABELS.items():
+        old_value = normalize_mouse_log_value(field, (old_data or {}).get(field))
+        new_value = normalize_mouse_log_value(field, (new_data or {}).get(field))
+        if old_value == new_value:
+            continue
+        changes.append({
+            'field': field,
+            'label': label,
+            'old_value': format_mouse_log_value(field, old_value),
+            'new_value': format_mouse_log_value(field, new_value)
+        })
+    return changes
+
+
+def build_mouse_update_detail(mouse_id, changes):
+    if not changes:
+        return f"修改了小鼠 {mouse_id} 的信息"
+    labels = '、'.join([change['label'] for change in changes])
+    return f"修改了小鼠 {mouse_id} 的 {len(changes)} 项信息：{labels}"
+
+def serialize_status_record(record):
+    return {
+        'id': record.id,
+        'mouse_id': record.mouse_id,
+        'record_date': record.record_date.isoformat() if record.record_date else None,
+        'record_livingdays': record.record_livingdays,
+        'status': record.status
+    }
+
+
+def build_status_record_detail(action, mouse_id, record_data):
+    if not record_data:
+        return f"修改了小鼠 {mouse_id} 的状态记录"
+    if record_data.get('record_livingdays') == -1:
+        time_label = '导入默认记录'
+    else:
+        date_label = record_data.get('record_date') or '未知日期'
+        time_label = f"{date_label}（{record_data.get('record_livingdays')}天时）"
+    status_text = record_data.get('status') or '空'
+    action_labels = {
+        'CREATE': '添加了',
+        'UPDATE': '修改了',
+        'DELETE': '删除了'
+    }
+    return f"{action_labels.get(action, '操作了')}小鼠 {mouse_id} 的状态记录：{time_label}，内容：{status_text}"
+
+
+def format_status_record_time(record_data):
+    if not record_data:
+        return '空'
+    if record_data.get('record_livingdays') == -1:
+        return '导入默认记录'
+    date_label = record_data.get('record_date') or '未知日期'
+    living_days = record_data.get('record_livingdays')
+    if living_days is None:
+        return date_label
+    return f"{date_label}（{living_days}天时）"
+
+
+def build_status_record_changes(old_data, new_data):
+    changes = []
+    old_time = format_status_record_time(old_data)
+    new_time = format_status_record_time(new_data)
+    if old_time != new_time:
+        changes.append({
+            'field': 'record_time',
+            'label': '记录时间',
+            'old_value': old_time,
+            'new_value': new_time
+        })
+
+    old_status = (old_data or {}).get('status') or '空'
+    new_status = (new_data or {}).get('status') or '空'
+    if old_status != new_status:
+        changes.append({
+            'field': 'status',
+            'label': '记录内容',
+            'old_value': old_status,
+            'new_value': new_status
+        })
+    return changes
+
+
+def serialize_operation_log(log):
+    data = log.to_dict()
+    changes = None
+    if log.target_table == 'mouse' and log.action == 'UPDATE':
+        changes = build_mouse_log_changes(log.old_data, log.new_data)
+    elif log.target_table == 'status_record' and log.action == 'UPDATE':
+        changes = build_status_record_changes(log.old_data, log.new_data)
+    data['changes'] = changes
+    return data
+
 @app.route('/api/database/backup/manual', methods=['POST'])
 def manual_backup():
     perform_backup("manual")
@@ -247,7 +439,7 @@ def get_logs():
         # 按时间倒序返回
         logs = query.order_by(OperationLog.timestamp.desc()).limit(limit).all()
         
-        return jsonify([l.to_dict() for l in logs]), 200
+        return jsonify([serialize_operation_log(l) for l in logs]), 200
     except Exception as e:
         logger.error(f"获取日志失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -469,7 +661,7 @@ def update_mouse(mouse_tid):
     """更新小鼠信息"""
     data = request.json
     mouse = Mouse.query.get_or_404(mouse_tid)
-    old_snapshot = mouse.to_dict()
+    old_snapshot = build_mouse_log_snapshot(mouse)
     try:
         if 'id' in data and data['id']:
             new_id = data['id']
@@ -534,8 +726,10 @@ def update_mouse(mouse_tid):
                 )
                 db.session.add(parent)
         db.session.flush() # 刷新 session 使得修改生效但未提交
-        new_snapshot = mouse.to_dict() # 记录修改后状态
-        log_action('UPDATE', 'mouse', mouse.id, f"修改了小鼠 {mouse.id} 的信息", old_snapshot, new_snapshot)
+        new_snapshot = build_mouse_log_snapshot(mouse)
+        changes = build_mouse_log_changes(old_snapshot, new_snapshot)
+        detail = build_mouse_update_detail(mouse.id, changes)
+        log_action('UPDATE', 'mouse', mouse.id, detail, old_snapshot, new_snapshot)
         db.session.commit()
         return jsonify(), 201
     except Exception as e:
@@ -938,6 +1132,7 @@ def get_mice_info(mouse_tid):
         } for w in weight_records]
         content['status_records'] = [{
             'id': s.id,
+            'record_date': s.record_date.isoformat() if s.record_date else None,
             'status': s.status,
             'record_livingdays': s.record_livingdays
         } for s in status_records]
@@ -953,7 +1148,18 @@ def delete_status_record(record_id):
     if not record:
         return jsonify({'error': 'Status record not found'}), 404
     try:
+        mouse = Mouse.query.get(record.mouse_id)
+        record_snapshot = serialize_status_record(record)
         db.session.delete(record)
+        if mouse:
+            log_action(
+                'DELETE',
+                'status_record',
+                mouse.id,
+                build_status_record_detail('DELETE', mouse.id, record_snapshot),
+                record_snapshot,
+                None
+            )
         db.session.commit()
         return jsonify({'message': 'Status record deleted successfully'})
     except Exception as e:
@@ -964,10 +1170,11 @@ def delete_status_record(record_id):
 @app.route('/api/status_records', methods=['POST'])
 def add_status_record():
     data = request.json
-    if not data or 'mouse_tid' not in data or 'status' not in data:
+    if not data or 'mouse_tid' not in data or 'status' not in data or 'record_date' not in data:
         return jsonify({'error': 'Invalid request format. Expected mouse_tid, status and birth_date.'}), 400
     try:
-        birth_date = Mouse.query.get_or_404(data['mouse_tid']).birth_date
+        mouse = Mouse.query.get_or_404(data['mouse_tid'])
+        birth_date = mouse.birth_date
         record_date = datetime.strptime(data['record_date'], '%Y-%m-%d').date()
         record_livingdays = (record_date - birth_date).days if birth_date else 0
         record = StatusRecord(
@@ -977,14 +1184,60 @@ def add_status_record():
             status=data['status']
         )
         db.session.add(record)
+        db.session.flush()
+        record_snapshot = serialize_status_record(record)
+        log_action(
+            'CREATE',
+            'status_record',
+            mouse.id,
+            build_status_record_detail('CREATE', mouse.id, record_snapshot),
+            None,
+            record_snapshot
+        )
         db.session.commit()
         return jsonify({
             'id': record.id,
+            'record_date': record.record_date.isoformat() if record.record_date else None,
             'record_livingdays': record.record_livingdays,
             'status': record.status
         }), 201
     except Exception as e:
         logger.error(f"添加小鼠状态失败: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/status_records/<int:record_id>', methods=['PUT'])
+def update_status_record(record_id):
+    data = request.json
+    if not data or 'status' not in data or 'record_date' not in data:
+        return jsonify({'error': 'Invalid request format. Expected status and record_date.'}), 400
+    try:
+        record = StatusRecord.query.get_or_404(record_id)
+        mouse = Mouse.query.get_or_404(record.mouse_id)
+        old_snapshot = serialize_status_record(record)
+        record.record_date = datetime.strptime(data['record_date'], '%Y-%m-%d').date()
+        record.record_livingdays = (record.record_date - mouse.birth_date).days if mouse.birth_date else 0
+        record.status = data['status']
+        db.session.flush()
+        new_snapshot = serialize_status_record(record)
+        log_action(
+            'UPDATE',
+            'status_record',
+            mouse.id,
+            build_status_record_detail('UPDATE', mouse.id, new_snapshot),
+            old_snapshot,
+            new_snapshot
+        )
+        db.session.commit()
+        return jsonify({
+            'id': record.id,
+            'record_date': record.record_date.isoformat() if record.record_date else None,
+            'record_livingdays': record.record_livingdays,
+            'status': record.status
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"修改小鼠状态失败: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

@@ -296,6 +296,7 @@ animal-lab-management/
 - [x] add sex 'unknown'
 - [x] mouse id editable
 - [x] Log system
+  - [x] 具体操作日志
 - [x] batch create mouse from range of ids
 - [ ] 笼位视图拉长
 - [ ] 小鼠批量操作

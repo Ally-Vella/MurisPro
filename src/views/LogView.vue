@@ -54,15 +54,43 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="log in logs" :key="log.id">
-            <td class="time-cell">{{ log.timestamp }}</td>
-            <td class="user-cell"><i class="material-icons user-icon">person</i> {{ log.username }}</td>
-            <td>
-              <span :class="['action-badge', log.action.toLowerCase()]">{{ log.action }}</span>
-            </td>
-            <td><span class="target-badge">{{ log.target }}</span></td>
-            <td class="detail-cell">{{ log.detail || '-' }}</td>
-          </tr>
+          <template v-for="log in logs" :key="log.id">
+            <tr>
+              <td class="time-cell">{{ log.timestamp }}</td>
+              <td class="user-cell"><i class="material-icons user-icon">person</i> {{ log.username }}</td>
+              <td>
+                <span :class="['action-badge', log.action.toLowerCase()]">{{ log.action }}</span>
+              </td>
+              <td><span class="target-badge">{{ log.target }}</span></td>
+              <td class="detail-cell">
+                <div class="detail-main">
+                  <span>{{ log.detail || '-' }}</span>
+                  <button
+                    v-if="hasChanges(log)"
+                    class="detail-toggle"
+                    @click="toggleExpanded(log.id)"
+                  >
+                    <i class="material-icons">{{ expandedLogs.has(log.id) ? 'expand_less' : 'expand_more' }}</i>
+                    {{ expandedLogs.has(log.id) ? '收起明细' : '查看明细' }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="hasChanges(log) && expandedLogs.has(log.id)" class="detail-expand-row">
+              <td colspan="5" class="detail-expand-cell">
+                <div class="change-list">
+                  <div v-for="change in log.changes" :key="`${log.id}-${change.field}`" class="change-item">
+                    <div class="change-label">{{ change.label }}</div>
+                    <div class="change-values">
+                      <span class="change-before">{{ change.old_value }}</span>
+                      <i class="material-icons change-arrow">arrow_forward</i>
+                      <span class="change-after">{{ change.new_value }}</span>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
       
@@ -83,11 +111,24 @@ const api = axios.create({ baseURL: '/api' })
 
 const logs = ref([])
 const loading = ref(false)
+const expandedLogs = ref(new Set())
 const filters = reactive({
   username: '',
   target_id: '',
   action: ''
 })
+
+const hasChanges = (log) => Array.isArray(log.changes) && log.changes.length > 0
+
+const toggleExpanded = (logId) => {
+  const next = new Set(expandedLogs.value)
+  if (next.has(logId)) {
+    next.delete(logId)
+  } else {
+    next.add(logId)
+  }
+  expandedLogs.value = next
+}
 
 // 获取日志数据
 const fetchLogs = async () => {
@@ -102,6 +143,7 @@ const fetchLogs = async () => {
       }
     })
     logs.value = response.data
+    expandedLogs.value = new Set()
   } catch (error) {
     console.error('获取日志失败', error)
     toast.error('获取日志失败')
@@ -278,6 +320,83 @@ onMounted(() => {
   line-height: 1.5;
 }
 
+.detail-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #dbe3ef;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #2563eb;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.detail-toggle .material-icons {
+  font-size: 18px;
+}
+
+.detail-expand-row {
+  background: #fbfdff;
+}
+
+.detail-expand-cell {
+  padding: 0 16px 16px 16px !important;
+}
+
+.change-list {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.change-item {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.change-item:last-child {
+  border-bottom: none;
+}
+
+.change-label {
+  font-weight: 600;
+  color: #334155;
+}
+
+.change-values {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #475569;
+}
+
+.change-before,
+.change-after {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.change-arrow {
+  font-size: 18px;
+  color: #94a3b8;
+}
+
 /* 操作动作标签 */
 .action-badge {
   padding: 4px 10px;
@@ -359,6 +478,11 @@ onMounted(() => {
   .filter-group.button-group {
     margin-left: 0;
     justify-content: flex-start;
+  }
+  .detail-main,
+  .change-item {
+    display: flex;
+    flex-direction: column;
   }
 }
 </style>
